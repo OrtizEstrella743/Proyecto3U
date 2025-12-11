@@ -42,13 +42,13 @@ jobs:
       with:
         context: ./app
         push: true
-        # --- USAMOS EL USUARIO DE DOCKER HUB (star01or) ---
+
         tags: star01or/validator:${{ github.sha }}, star01or/validator:latest
-        # -------------------------------------------------
+        
         build-args: |
           APP_VERSION=${{ github.sha }}
 
-    # --- FASE DE DESPLIEGUE (Simplificado) ---
+          
     - name: Log Deployment Instruction (CD Manual)
       run: |
         echo "✅ CI COMPLETA. Imagen Docker push a star01or/validator:latest."
