@@ -8,18 +8,20 @@ const APP_VERSION = process.env.APP_VERSION || '1.0.0';
 
 // --- 1. Configuración de Métricas (Prometheus) [cite: 37] ---
 const register = new promClient.Registry();
-promClient.collectDefaultMetrics({ register, prefix: 'validator_' }); // Prefijo distinto
+// Recolección de métricas por defecto (CPU, memoria, I/O) [cite: 43]
+promClient.collectDefaultMetrics({ register, prefix: 'validator_' }); 
 
-// Métrica personalizada: Latencia de la operación crítica [cite: 39]
+// Métrica personalizada: Latencia de la operación crítica (SLI de Latencia) [cite: 39]
 const transactionLatency = new promClient.Histogram({
     name: 'transaction_validation_duration_ms',
     help: 'Duración de la validación de transacciones en milisegundos',
     labelNames: ['version', 'result'],
-    buckets: [50, 150, 300, 600, 1000] // Microservicio crítico, buckets más estrictos
+    // Buckets definidos para el SLO/SLI de latencia
+    buckets: [50, 150, 300, 600, 1000] 
 });
 register.registerMetric(transactionLatency);
 
-// Métrica personalizada: Contador de errores por tipo [cite: 42]
+// Métrica personalizada: Contador de errores 5xx (SLI de Errores) [cite: 42]
 const validationErrorCounter = new promClient.Counter({
     name: 'validation_error_types_total',
     help: 'Contador de errores por tipo (DB, Timeout, External)',
@@ -34,6 +36,10 @@ app.use((req, res, next) => {
         const diff = process.hrtime(start);
         const duration_ms = (diff[0] * 1000) + (diff[1] / 1000000);
         
+        // Registrar métrica de latencia
+        transactionLatency.labels(APP_VERSION, res.statusCode < 500 ? 'approved' : 'failed').observe(duration_ms);
+
+        // Log estructurado en JSON (pilar de Logs) [cite: 7]
         const logEntry = {
             level: res.statusCode >= 500 ? 'ERROR' : (duration_ms > 500 ? 'WARN' : 'INFO'),
             timestamp: new Date().toISOString(),
@@ -43,7 +49,7 @@ app.use((req, res, next) => {
             path: req.path,
             status: res.statusCode,
             duration_ms: duration_ms,
-            // Simulación de log desordenado/inconsistente para la detección 
+            // Simulación de log desordenado/inconsistente para la detección de errores [cite: 7]
             message: res.statusCode >= 500 ? `Fallo en versión ${APP_VERSION}` : 'Transacción procesada correctamente',
         };
         console.log(JSON.stringify(logEntry));
@@ -57,35 +63,32 @@ app.use((req, res, next) => {
 app.post('/validate', (req, res) => {
     const startLatency = Date.now();
     
-    // Simulación de latencia incrementada [cite: 5]
+    // Simulación de latencia incrementada en horarios pico [cite: 5]
     const baseDelay = 100;
     const peakDelay = Math.random() * 400; // Hasta 400ms adicionales
     const delay = baseDelay + peakDelay;
     
     setTimeout(() => {
         let result = 'approved';
-        // Simulación de incremento de errores 500 [cite: 6]
-        if (Math.random() < 0.05) { // 5% de fallo para simular el problema crítico
+        // Simulación de incremento del 0.8% en errores 500 (usamos 5% para que sea visible) [cite: 6]
+        if (Math.random() < 0.05) { 
             validationErrorCounter.inc({ type: 'external_service_timeout', version: APP_VERSION });
             result = 'failed';
-            const latencyEnd = Date.now() - startLatency;
-            transactionLatency.labels(APP_VERSION, result).observe(latencyEnd);
+            // Usa 503 Service Unavailable para simular un fallo en un microservicio externo
             return res.status(503).json({ error: 'External Validation Timeout' });
         }
         
-        const latencyEnd = Date.now() - startLatency;
-        transactionLatency.labels(APP_VERSION, result).observe(latencyEnd);
-        res.status(200).json({ status: result, version: APP_VERSION, process_time_ms: latencyEnd });
+        res.status(200).json({ status: result, version: APP_VERSION, process_time_ms: Date.now() - startLatency });
     }, delay);
 });
 
-// Endpoint de Métricas
+// Endpoint de Métricas para Prometheus
 app.get('/metrics', async (req, res) => {
     res.set('Content-Type', register.contentType);
     res.end(await register.metrics());
 });
 
-// Endpoint de Salud (para Canary/Nginx)
+// Endpoint de Salud (Vital para el Canary/Rollback) [cite: 32]
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', version: APP_VERSION });
 });
