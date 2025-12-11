@@ -5,58 +5,50 @@ services:
   # APLICACIÓN (PROD/CANARY)
   # ----------------------------------------------------------------
 
-  # Reverse Proxy (Canary Traffic Split)
   nginx:
     image: nginx:latest
     container_name: nginx-load-balancer
     ports:
       - "8085:80"
-    # Mapeo del directorio Nginx. Los scripts de deploy/rollback copiarán
-    # canary_nginx.conf o stable_nginx.conf a default.conf en esta ruta.
     volumes:
       - ./nginx:/etc/nginx/conf.d:ro 
     networks:
       - payflow-network
 
-  # Microservicio - Entorno Producción (Estable)
   app-prod:
     build: 
       context: ./app
-      # Se usa el Dockerfile simple que asume que el código está en /app
     container_name: app-prod
     environment:
       - PORT=3000
-      - APP_VERSION=stable # Variable de version para la app
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318/v1/traces # Envía trazas a Tempo
+      - APP_VERSION=stable
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318/v1/traces
     ports:
-      - "3001:3000" # Puerto externo para healthcheck/debugging
+      - "3001:3000"
     networks:
       - payflow-network
     labels:
-      org.label-schema.version: "stable" # Etiqueta para promtail/loki
+      org.label-schema.version: "stable"
 
-  # Microservicio - Entorno Canary (Nuevo)
   app-canary:
     build: 
       context: ./app
-      # Se usa el Dockerfile simple que asume que el código está en /app
     container_name: app-canary
     environment:
       - PORT=3000
       - APP_VERSION=canary_test
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318/v1/traces # Envía trazas a Tempo
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318/v1/traces
     ports:
       - "3002:3000"
     networks:
       - payflow-network
     labels:
-      org.label-schema.version: "canary_test" 
+      org.label-schema.version: "canary_test"
 
   # ----------------------------------------------------------------
   # SISTEMA DE MONITOREO (Observabilidad Completa)
   # ----------------------------------------------------------------
 
-  # [cite_start]MÉTRICAS: Prometheus [cite: 37]
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -69,31 +61,31 @@ services:
     networks:
       - payflow-network
 
-  # [cite_start]LOGS: Loki (Almacén de logs) [cite: 48]
   loki:
     image: grafana/loki:2.9.0
     container_name: loki
     ports:
       - "3100:3100"
     volumes:
+      # Configuración
       - ./monitoring/loki-config.yaml:/etc/loki/local-config.yaml
+      # Volumen persistente recomendado
+      - loki-data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     networks:
       - payflow-network
 
-  # RECOLECTOR DE LOGS: Promtail
   promtail:
     image: grafana/promtail:2.9.0
     container_name: promtail
     volumes:
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro # Necesario para leer logs
-      - /var/run/docker.sock:/var/run/docker.sock:ro             # Socket para metadatos
-      - ./monitoring/promtail-config.yaml:/etc/promtail/config.yml # Archivo de configuración
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./monitoring/promtail-config.yaml:/etc/promtail/config.yml
     command: -config.file=/etc/promtail/config.yml
     networks:
       - payflow-network
 
-  # [cite_start]TRAZAS: Tempo (Rastreo distribuido) [cite: 52]
   tempo:
     image: grafana/tempo:latest
     container_name: tempo
@@ -101,11 +93,10 @@ services:
     volumes:
       - ./monitoring/tempo.yaml:/etc/tempo.yaml
     ports:
-      - "4318:4318" # OTLP HTTP (Usado por Node.js OpenTelemetry)
+      - "4318:4318"
     networks:
       - payflow-network
 
-  # [cite_start]VISUALIZACIÓN: Grafana [cite: 37]
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -123,3 +114,7 @@ services:
 networks:
   payflow-network:
     driver: bridge
+
+volumes:
+  loki-data:
+    driver: local
