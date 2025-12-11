@@ -24,7 +24,7 @@ jobs:
     - name: Install Dependencies & Run Automated Tests
       run: |
         cd app
-        npm install
+        npm i
         npm test
 
     - name: Set up Docker Buildx
