@@ -82,13 +82,11 @@ app.post('/validate', (req, res) => {
     }, delay);
 });
 
-// Endpoint de Métricas para Prometheus
 app.get('/metrics', async (req, res) => {
     res.set('Content-Type', register.contentType);
     res.end(await register.metrics());
 });
 
-// Endpoint de Salud (Vital para el Canary/Rollback) [cite: 32]
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', version: APP_VERSION });
 });
