@@ -5,7 +5,7 @@ const { HttpInstrumentation } = require('@opentelemetry/instrumentation-http');
 
 const serviceName = 'transaction-validator';
 
-// Configura el exportador de trazas para Tempo (OTLP over HTTP)
+
 const traceExporter = new OTLPTraceExporter({
     url: 'http://tempo:4318/v1/traces', 
 });

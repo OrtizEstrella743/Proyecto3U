@@ -70,11 +70,11 @@ app.post('/validate', (req, res) => {
     
     setTimeout(() => {
         let result = 'approved';
-        // Simulación de incremento del 0.8% en errores 500 (usamos 5% para que sea visible) [cite: 6]
+        
         if (Math.random() < 0.05) { 
             validationErrorCounter.inc({ type: 'external_service_timeout', version: APP_VERSION });
             result = 'failed';
-            // Usa 503 Service Unavailable para simular un fallo en un microservicio externo
+
             return res.status(503).json({ error: 'External Validation Timeout' });
         }
         
