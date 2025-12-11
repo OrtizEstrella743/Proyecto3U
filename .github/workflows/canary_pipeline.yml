@@ -42,7 +42,9 @@ jobs:
       with:
         context: ./app
         push: true
-        tags: payflowmx/validator:${{ github.sha }}, payflowmx/validator:latest
+        # --- CAMBIA ESTA LÍNEA ABAJO ---
+        tags: star01or/validator:${{ github.sha }}, star01or/validator:latest
+        # -----------------------------
         build-args: |
           APP_VERSION=${{ github.sha }}
 
