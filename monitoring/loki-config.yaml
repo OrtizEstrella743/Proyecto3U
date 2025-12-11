@@ -1,0 +1,15 @@
+auth_enabled: false 
+server:
+  http_listen_port: 3100
+common:
+  path_prefix: /loki/data
+  replication_factor: 1
+  storage_config:
+    boltdb_shipper:
+      active_index_directory: /loki/data/index
+      cache_location: /loki/data/cache
+    filesystem:
+      directory: /loki/data/chunks
+  ring:
+    kvstore:
+      store: inmemory

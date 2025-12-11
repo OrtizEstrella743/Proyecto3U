@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------
+  # APLICACIÓN (PROD/CANARY)
+  # ----------------------------------------------------------------
+
+  # Reverse Proxy (Canary Traffic Split)
+  nginx:
+    image: nginx:latest
+    container_name: nginx-load-balancer
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/canary_nginx.conf:/etc/nginx/conf.d/default.conf # Usamos el config Canary
+    networks:
+      - payflow-network
+
+  # Microservicio - Entorno Producción (Estable)
+  app-prod:
+    build: 
+      context: ./app
+      args:
+        APP_VERSION: stable
+    container_name: app-prod
+    environment:
+      - PORT=3000
+      - APP_VERSION=stable # Variable de version para la app
+    ports:
+      - "3001:3000" # Puerto externo para healthcheck/debugging
+    networks:
+      - payflow-network
+    labels:
+      org.label-schema.version: "stable" # Etiqueta para promtail/loki
+
+  # Microservicio - Entorno Canary (Nuevo)
+  app-canary:
+    build: 
+      context: ./app
+      args:
+        APP_VERSION: canary_test
+    container_name: app-canary
+    environment:
+      - PORT=3000
+      - APP_VERSION=canary_test
+    ports:
+      - "3002:3000"
+    networks:
+      - payflow-network
+    labels:
+      org.label-schema.version: "canary_test" 
+
+  # ----------------------------------------------------------------
+  # SISTEMA DE MONITOREO (Observabilidad Completa)
+  # ----------------------------------------------------------------
+
+  # MÉTRICAS: Prometheus [cite: 37]
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    networks:
+      - payflow-network
+
+  # LOGS: Loki (Almacén de logs) [cite: 48]
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki-config.yaml:/etc/loki/local-config.yaml
+    networks:
+      - payflow-network
+
+  # RECOLECTOR DE LOGS: Promtail
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro # Necesario para leer logs
+      - /var/run/docker.sock:/var/run/docker.sock:ro             # Socket para metadatos
+      - ./monitoring/promtail-config.yaml:/etc/promtail/config.yml # Asegurar la existencia del config
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - payflow-network
+
+  # TRAZAS: Tempo (Rastreo distribuido) [cite: 52]
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./monitoring/tempo.yaml:/etc/tempo.yaml
+    ports:
+      - "4318:4318" # OTLP HTTP (Usado por Node.js OpenTelemetry)
+    networks:
+      - payflow-network
+
+  # VISUALIZACIÓN: Grafana [cite: 37]
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    networks:
+      - payflow-network
+
+networks:
+  payflow-network:
+    driver: bridge
